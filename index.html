@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>TAO Subnet Radar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: status line, key figures, latest undervalued report, full leaderboard, method */
+  :root {
+    --bg: #0c1016; --panel: #131922; --panel-2: #19212c; --line: #243040; --fg: #e6ebf2; --muted: #8b97a8;
+    --accent: #f2a93b; --accent-soft: rgba(242,169,59,.16); --cool: #5cc8d6; --up: #4cc38a; --down: #ef6b6b;
+    --ui: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --num: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14.5px/1.5 var(--ui); }
+  a { color: var(--cool); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 18px max(16px, 2vw) 56px; display: grid; gap: 18px; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline; }
+  h1 { margin: 0; font-size: 24px; display: flex; gap: 8px; align-items: baseline; }
+  h1 .tau { color: var(--accent); font-family: var(--num); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .banner { background: var(--accent-soft); border: 1px solid rgba(242,169,59,.35); border-radius: 10px; padding: 10px 14px; }
+  .banner[hidden] { display: none; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; min-width: 0; }
+  .kpi span { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .kpi b { font: 500 22px var(--num); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .kpi small { color: var(--muted); font-size: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; min-width: 0; }
+  .card h2 { margin: 0; font-size: 16px; }
+  .note { margin: 0; color: var(--muted); font-size: 13px; }
+  .tabs { display: inline-flex; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .tabs button { all: unset; cursor: pointer; padding: 5px 12px; border-radius: 7px; color: var(--muted); font-size: 13px; }
+  .tabs button[aria-selected=true] { background: var(--panel-2); color: var(--fg); font-weight: 500; }
+  .tabs button:focus-visible, .tools input:focus-visible, .tools select:focus-visible, th button:focus-visible { outline: 2px solid var(--accent); }
+  .head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  ol.picks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 10px; }
+  .pick { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; padding: 12px; background: var(--panel-2); border-radius: 10px; align-items: start; }
+  .pick .rk { font: 600 17px var(--num); color: var(--accent); text-align: right; }
+  .pick .nm { font-weight: 600; }
+  .pick .nm small { color: var(--muted); font: 12px var(--num); margin-left: 6px; }
+  .pick .cat { color: var(--muted); font-size: 12px; }
+  .pick ul { margin: 6px 0 0; padding-left: 16px; font-size: 13px; }
+  .pick .sc { font: 500 18px var(--num); text-align: right; }
+  .pick .sc small { display: block; font: 11px var(--ui); color: var(--muted); }
+  .list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .tools input, .tools select { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; max-width: 100%; }
+  .tools input { flex: 1 1 200px; max-width: 300px; }
+  .tablebox { overflow: auto; max-height: 75vh; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 500; font-size: 12px; text-align: right; white-space: nowrap; padding: 0; border-bottom: 1px solid var(--line); z-index: 1; }
+  th button { all: unset; cursor: pointer; display: block; padding: 8px 10px; width: 100%; box-sizing: border-box; text-align: inherit; }
+  th[aria-sort=descending] button::after { content: " ↓"; color: var(--accent); }
+  th[aria-sort=ascending] button::after { content: " ↑"; color: var(--accent); }
+  td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: var(--num); font-size: 12.5px; }
+  td.l, th.l { text-align: left; }
+  td.name { font-family: var(--ui); font-size: 13.5px; }
+  td.cat { font-family: var(--ui); color: var(--muted); font-size: 12px; }
+  td.spark svg { display: block; width: 72px; height: 20px; }
+  .meter { display: inline-block; width: 56px; height: 7px; background: var(--line); border-radius: 4px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+  .meter i { display: block; height: 100%; background: var(--accent); }
+  .up { color: var(--up); } .down { color: var(--down); } .dim { color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 40px 10px; }
+  @media (max-width: 520px) { .pick { grid-template-columns: 24px minmax(0, 1fr); } .pick .sc { grid-column: 2; text-align: left; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1><span class="tau">τ</span> TAO Subnet Radar</h1>
+    <span class="sub" id="updated">Loading…</span>
+  </header>
+  <div class="banner" id="stale" hidden></div>
+
+  <section class="kpis">
+    <div class="kpi"><span>Subnets</span><b id="k-n">—</b><small id="k-block">&nbsp;</small></div>
+    <div class="kpi"><span>Total market cap</span><b id="k-mcap">—</b><small>in TAO</small></div>
+    <div class="kpi"><span>Top by Radar score</span><b id="k-top">—</b><small id="k-top-sub">&nbsp;</small></div>
+    <div class="kpi"><span>Developer data</span><b id="k-dev">—</b><small>public GitHub repos</small></div>
+  </section>
+
+  <section class="card" id="report-card">
+    <div class="head">
+      <h2 id="rep-title">Undervalued subnets</h2>
+      <div class="tabs" role="tablist" id="tabs"></div>
+    </div>
+    <p class="note" id="rep-sub"></p>
+    <ol class="picks" id="picks"></ol>
+    <div id="rep-extra"></div>
+  </section>
+
+  <section class="card">
+    <h2>All subnets</h2>
+    <div class="tools">
+      <input id="search" type="search" placeholder="Search name or SN" aria-label="Search subnets">
+      <select id="cat" aria-label="Category"><option value="">All categories</option></select>
+      <span class="sub" id="count"></span>
+    </div>
+    <div class="tablebox"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
+  </section>
+
+  <section class="card">
+    <h2>How to read this</h2>
+    <ul class="list">
+      <li><b>Radar score</b> (0–100): size, momentum, net TAO flow, emissions vs. market-cap share, pool depth, trading activity and GitHub development, each ranked against all subnets.</li>
+      <li><b>Value score</b> (reports): only the undervaluation signals, averaged over the week or month. Subnets with steady selling or collapsing development are excluded from the top 10.</li>
+      <li><b>Value gap</b>: share of network emissions divided by share of market cap. Above 1× the network pays more than the market values.</li>
+      <li><b>Dev gap</b>: development rank minus size rank. Positive means it builds more than its size suggests.</li>
+    </ul>
+    <p class="note">Data from the Bittensor chain and public GitHub repos, collected by a private radar. A research filter, not investment advice.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e.setAttribute(k, v); } for (const c of kids) if (c != null) e.append(c); return e; };
+  const compact = (v) => v == null ? '–' : new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+  const pct = (v, d = 1) => v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d) + '%';
+  const cls = (v) => v == null ? 'dim' : v > 0 ? 'up' : v < 0 ? 'down' : '';
+  const when = (ts) => new Date(ts * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const COLS = [
+    { k: 'rank', t: '#', asc: true, f: (v) => v ?? '–' }, { k: 'netuid', t: 'SN', asc: true, f: (v) => v },
+    { k: 'name', t: 'Subnet', l: true }, { k: 'category', t: 'Category', l: true },
+    { k: 'score', t: 'Score' }, { k: 'price', t: 'Price τ', f: (v) => v == null ? '–' : v.toFixed(v < 0.01 ? 5 : 4) },
+    { k: 'spark', t: '7d trend', sortBy: 'chg_7d' }, { k: 'chg_24h', t: '24h', pct: true }, { k: 'chg_7d', t: '7d', pct: true },
+    { k: 'mcap', t: 'Mcap τ', f: compact }, { k: 'emission_pct', t: 'Emission', f: (v) => v == null ? '–' : v.toFixed(2) + '%' },
+    { k: 'value_gap', t: 'Value gap', f: (v) => v == null ? '–' : v.toFixed(2) + '×' },
+    { k: 'net_flow_24h', t: 'Net flow 24h τ', f: (v) => v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + compact(Math.abs(v)), c: true },
+    { k: 'tao_in', t: 'Pool τ', f: compact }, { k: 'dev_score', t: 'Dev', f: (v) => v == null ? '–' : v.toFixed(0) },
+    { k: 'commits_30d', t: 'Commits 30d', f: (v) => v ?? '–' }, { k: 'dev_gap', t: 'Dev gap', f: (v) => v == null ? '–' : (v > 0 ? '+' : '') + v, c: true },
+  ];
+  let data = null, sort = { k: 'rank', dir: 1 }, q = '', cat = '', kind = 'weekly';
+
+  function spark(values) {
+    const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 72 20'); svg.setAttribute('aria-hidden', 'true');
+    if (!values || values.length < 2) return svg;
+    const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || hi || 1;
+    const line = document.createElementNS(ns, 'polyline');
+    line.setAttribute('points', values.map((v, i) => (i / (values.length - 1) * 70 + 1).toFixed(1) + ',' + (18 - (v - lo) / span * 16).toFixed(1)).join(' '));
+    line.setAttribute('fill', 'none'); line.setAttribute('stroke-width', '1.5'); line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('stroke', values[values.length - 1] >= values[0] ? '#4cc38a' : '#ef6b6b');
+    svg.append(line); return svg;
+  }
+
+  function header() {
+    $('updated').textContent = 'Updated ' + when(data.updated) + ' · refreshes every few hours while the radar runs';
+    const age = (Date.now() / 1000 - data.updated) / 3600;
+    $('stale').hidden = age < 12;
+    $('stale').textContent = age >= 12 ? 'This data is ' + Math.round(age) + ' hours old: the radar PC is probably off. Figures show the last published state.' : '';
+    $('k-n').textContent = data.subnets.length; $('k-block').textContent = 'block ' + data.block.toLocaleString('en');
+    $('k-mcap').textContent = compact(data.total_mcap) + ' τ';
+    const top = data.subnets.find((s) => s.rank === 1);
+    if (top) { $('k-top').textContent = top.name; $('k-top-sub').textContent = 'SN' + top.netuid + ' · score ' + top.score.toFixed(1); }
+    $('k-dev').textContent = data.dev && data.dev.subnets ? data.dev.subnets + ' repos' : '–';
+  }
+
+  function report() {
+    const reps = data.reports || {};
+    const kinds = ['weekly', 'monthly'].filter((k) => reps[k]);
+    const tabs = $('tabs'); tabs.replaceChildren();
+    if (!kinds.includes(kind)) kind = kinds[0] || 'weekly';
+    for (const k of kinds) {
+      const b = el('button', { role: 'tab', 'aria-selected': String(k === kind), text: k === 'weekly' ? 'Weekly' : 'Monthly' });
+      b.addEventListener('click', () => { kind = k; report(); }); tabs.append(b);
+    }
+    const rep = reps[kind], picks = $('picks'), extra = $('rep-extra');
+    picks.replaceChildren(); extra.replaceChildren();
+    if (!rep) { $('rep-title').textContent = 'Undervalued subnets'; $('rep-sub').textContent = 'The first report appears after the radar has collected a few days of history.'; return; }
+    $('rep-title').textContent = (kind === 'weekly' ? 'Weekly' : 'Monthly') + ' undervalued subnets' + (rep.preview ? ' (preview)' : '');
+    $('rep-sub').textContent = 'Report of ' + when(rep.ts) + ' · ' + rep.coverage_days + ' of ' + rep.period_days + ' days of data. Price change since the report is shown per pick.';
+    const now = Object.fromEntries(data.subnets.map((s) => [s.netuid, s]));
+    for (const r of rep.top) {
+      const cur = now[r.netuid], since = cur && cur.price && r.price ? (cur.price / r.price - 1) * 100 : null;
+      picks.append(el('li', { class: 'pick' }, el('div', { class: 'rk', text: r.value_rank }),
+        el('div', {}, el('div', { class: 'nm' }, r.name, el('small', { text: 'SN' + r.netuid })),
+          el('div', { class: 'cat', text: (r.category || 'Other') + ' · mcap ' + compact(r.mcap) + ' τ' }),
+          el('ul', {}, ...(r.reasons.length ? r.reasons : ['solid on all signals']).map((t) => el('li', { text: t }))),
+          el('div', { class: 'cat ' + cls(since), text: 'Since report: ' + pct(since) })),
+        el('div', { class: 'sc' }, (r.value_score ?? 0).toFixed(0), el('small', { text: 'value' }))));
+    }
+    if (rep.divergences && rep.divergences.length) extra.append(el('p', { class: 'note' }, el('b', { text: 'Fundamentals up, price flat: ' }), rep.divergences.map((r) => r.name + ' (SN' + r.netuid + ')').join(', ')));
+    if (rep.warnings && rep.warnings.length) extra.append(el('p', { class: 'note' }, el('b', { text: 'Warnings: ' }), rep.warnings.map((r) => r.name + ' (' + r.why[0] + ')').join(', ')));
+  }
+
+  function head() {
+    const tr = $('thead'); tr.replaceChildren();
+    for (const c of COLS) {
+      const key = c.sortBy || c.k, th = el('th', c.l ? { class: 'l' } : {});
+      if (sort.k === key && (!c.sortBy || sort.via === c.k)) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending');
+      const b = el('button', { type: 'button', text: c.t });
+      b.addEventListener('click', () => { sort = sort.k === key ? { k: key, dir: -sort.dir, via: c.k } : { k: key, dir: (c.asc || c.l) ? 1 : -1, via: c.k }; head(); table(); });
+      th.append(b); tr.append(th);
+    }
+  }
+
+  function table() {
+    const tb = $('tbody'); tb.replaceChildren();
+    let rows = data.subnets.filter((r) => (!q || (r.name || '').toLowerCase().includes(q) || String(r.netuid) === q) && (!cat || r.category === cat));
+    rows.sort((a, b) => { const av = a[sort.k], bv = b[sort.k]; if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * sort.dir; });
+    $('count').textContent = rows.length + ' subnets';
+    for (const r of rows) {
+      const tr = el('tr');
+      for (const c of COLS) {
+        const v = r[c.k];
+        if (c.k === 'name') { tr.append(el('td', { class: 'l name', text: r.name })); continue; }
+        if (c.k === 'category') { tr.append(el('td', { class: 'l cat', text: v || '–' })); continue; }
+        if (c.k === 'spark') { tr.append(el('td', { class: 'spark' }, spark(r.spark))); continue; }
+        if (c.k === 'score') { const m = el('span', { class: 'meter' }, el('i')); m.firstChild.style.width = (v || 0) + '%'; tr.append(el('td', {}, m, v == null ? '–' : v.toFixed(1))); continue; }
+        if (c.pct) { tr.append(el('td', { class: cls(v), text: pct(v) })); continue; }
+        tr.append(el('td', { class: c.c ? cls(v) : '', text: c.f ? c.f(v) : String(v ?? '–') }));
+      }
+      tb.append(tr);
+    }
+  }
+
+  $('search').addEventListener('input', (e) => { q = e.target.value.trim().toLowerCase(); table(); });
+  $('cat').addEventListener('change', (e) => { cat = e.target.value; table(); });
+  fetch('data.json?t=' + Date.now(), { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+    data = d; header(); report();
+    const cats = [...new Set(d.subnets.map((s) => s.category).filter(Boolean))].sort();
+    $('cat').append(...cats.map((c) => el('option', { value: c, text: c })));
+    head(); table();
+  }).catch(() => { $('updated').textContent = 'No data published yet.'; });
+})();
+</script>
+</body>
+</html>
