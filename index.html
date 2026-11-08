@@ -37,6 +37,11 @@
   .tabs button { all: unset; cursor: pointer; padding: 5px 12px; border-radius: 7px; color: var(--muted); font-size: 13px; }
   .tabs button[aria-selected=true] { background: var(--panel-2); color: var(--fg); font-weight: 500; }
   .tabs button:focus-visible, .tools input:focus-visible, .tools select:focus-visible, th button:focus-visible { outline: 2px solid var(--accent); }
+  .viewbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .viewbar .tabs button { font-weight: 600; font-size: 14px; padding: 6px 16px; }
+  .viewbar .tabs button[aria-selected=true] { background: var(--accent); color: #1a1205; }
+  .tag { display: inline-block; font: 500 11px var(--ui); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.good { color: var(--up); border-color: rgba(76,195,138,.4); } .tag.mid { color: var(--warn, #e3b341); border-color: rgba(227,179,65,.4); } .tag.bad { color: var(--down); border-color: rgba(239,107,107,.4); }
   .head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
   ol.picks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 10px; }
   .pick { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; padding: 12px; background: var(--panel-2); border-radius: 10px; align-items: start; }
@@ -76,11 +81,18 @@
     <span class="sub" id="updated">Loading…</span>
   </header>
   <div class="banner" id="stale" hidden></div>
+  <div class="viewbar">
+    <div class="tabs" role="tablist" aria-label="View" id="views">
+      <button type="button" role="tab" data-view="investing" aria-selected="true">Investing</button>
+      <button type="button" role="tab" data-view="trading" aria-selected="false">Trading</button>
+    </div>
+    <span class="sub" id="viewnote"></span>
+  </div>
 
   <section class="kpis">
     <div class="kpi"><span>Subnets</span><b id="k-n">—</b><small id="k-block">&nbsp;</small></div>
     <div class="kpi"><span>Total market cap</span><b id="k-mcap">—</b><small>in TAO</small></div>
-    <div class="kpi"><span>Top by Radar score</span><b id="k-top">—</b><small id="k-top-sub">&nbsp;</small></div>
+    <div class="kpi"><span id="k-top-label">Top pick</span><b id="k-top">—</b><small id="k-top-sub">&nbsp;</small></div>
     <div class="kpi"><span>Developer data</span><b id="k-dev">—</b><small>public GitHub repos</small></div>
   </section>
 
@@ -107,8 +119,9 @@
   <section class="card">
     <h2>How to read this</h2>
     <ul class="list">
-      <li><b>Radar score</b> (0–100): size, momentum, net TAO flow, emissions vs. market-cap share, pool depth, trading activity and GitHub development, each ranked against all subnets.</li>
-      <li><b>Value score</b> (reports): only the undervaluation signals, averaged over the week or month. Subnets with steady selling or collapsing development are excluded from the top 10.</li>
+      <li><b>Investing score</b> (long term, 0–100): researched fundamentals 55% (live paid product, revenue, buybacks, price vs web2 rivals, rated 0–10) plus on-chain value 45% (emissions vs market-cap share, dev gap, net TAO inflow, discount, depth over 30 days). Only researched subnets get one; ⚠ marks steady selling or collapsing development.</li>
+      <li><b>Trading score</b> (short term, 0–100): 24h net TAO flow, 24h momentum, trading activity, depth and development, ranked against all subnets, refreshed hourly.</li>
+      <li>Revenue and buyback figures are mostly reported by the teams themselves.</li>
       <li><b>Value gap</b>: share of network emissions divided by share of market cap. Above 1× the network pays more than the market values.</li>
       <li><b>Dev gap</b>: development rank minus size rank. Positive means it builds more than its size suggests.</li>
     </ul>
@@ -124,10 +137,23 @@
   const pct = (v, d = 1) => v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d) + '%';
   const cls = (v) => v == null ? 'dim' : v > 0 ? 'up' : v < 0 ? 'down' : '';
   const when = (ts) => new Date(ts * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const COLS = [
+  const STATUS = { live_paid: ['Paid product', 'good'], live_free: ['Live, free', 'mid'], beta: ['Beta', 'mid'], research: ['Research', 'bad'], pre_launch: ['Pre-launch', 'bad'], unclear: ['Unclear', 'bad'] };
+  const BUYBACK = { active: ['Active', 'good'], planned: ['Planned', 'mid'], none: ['None', ''] };
+  const VERDICT = (v) => !v || v === 'n/a' ? null : v.startsWith('cheaper') ? ['Cheaper', 'good'] : v.startsWith('claimed') ? ['Claims cheaper', 'mid'] : v === 'better terms' ? ['Better terms', 'good'] : [v, ''];
+  const COLS_I = [
+    { k: 'inv_rank', t: '#', asc: true, f: (v) => v ?? '–' }, { k: 'netuid', t: 'SN', asc: true, f: (v) => v },
+    { k: 'name', t: 'Subnet', l: true }, { k: 'sector', t: 'Sector', l: true },
+    { k: 'inv_score', t: 'Investing', meter: true }, { k: 'fund', t: 'Fundamentals', f: (v) => v == null ? '–' : v.toFixed(1) + '/10' },
+    { k: 'val_score', t: 'On-chain value', f: (v) => v == null ? '–' : v.toFixed(0) },
+    { k: 'p_status', t: 'Product', l: true, tag: (r) => r.p ? STATUS[r.p.status] : ['Not researched', ''] },
+    { k: 'p_buyback', t: 'Buybacks', l: true, tag: (r) => r.p ? BUYBACK[r.p.buyback] : null },
+    { k: 'p_verdict', t: 'vs web2', l: true, tag: (r) => r.p ? VERDICT(r.p.price_verdict) : null },
+    { k: 'mcap', t: 'Mcap τ', f: compact }, { k: 'inv_flow', t: 'Net flow 30d', pct: true }, { k: 'inv_price', t: 'Price 30d', pct: true },
+  ];
+  const COLS_T = [
     { k: 'rank', t: '#', asc: true, f: (v) => v ?? '–' }, { k: 'netuid', t: 'SN', asc: true, f: (v) => v },
     { k: 'name', t: 'Subnet', l: true }, { k: 'category', t: 'Category', l: true },
-    { k: 'score', t: 'Score' }, { k: 'price', t: 'Price τ', f: (v) => v == null ? '–' : v.toFixed(v < 0.01 ? 5 : 4) },
+    { k: 'score', t: 'Trading', meter: true }, { k: 'price', t: 'Price τ', f: (v) => v == null ? '–' : v.toFixed(v < 0.01 ? 5 : 4) },
     { k: 'spark', t: '7d trend', sortBy: 'chg_7d' }, { k: 'chg_24h', t: '24h', pct: true }, { k: 'chg_7d', t: '7d', pct: true },
     { k: 'mcap', t: 'Mcap τ', f: compact }, { k: 'emission_pct', t: 'Emission', f: (v) => v == null ? '–' : v.toFixed(2) + '%' },
     { k: 'value_gap', t: 'Value gap', f: (v) => v == null ? '–' : v.toFixed(2) + '×' },
@@ -135,7 +161,10 @@
     { k: 'tao_in', t: 'Pool τ', f: compact }, { k: 'dev_score', t: 'Dev', f: (v) => v == null ? '–' : v.toFixed(0) },
     { k: 'commits_30d', t: 'Commits 30d', f: (v) => v ?? '–' }, { k: 'dev_gap', t: 'Dev gap', f: (v) => v == null ? '–' : (v > 0 ? '+' : '') + v, c: true },
   ];
-  let data = null, sort = { k: 'rank', dir: 1 }, q = '', cat = '', kind = 'weekly';
+  let view = 'investing';
+  try { if (localStorage.getItem('site-view') === 'trading') view = 'trading'; } catch (e) {}
+  let COLS = view === 'investing' ? COLS_I : COLS_T;
+  let data = null, sort = view === 'investing' ? { k: 'inv_rank', dir: 1 } : { k: 'rank', dir: 1 }, q = '', cat = '', kind = 'weekly';
 
   function spark(values) {
     const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
@@ -156,12 +185,33 @@
     $('stale').textContent = age >= 12 ? 'This data is ' + Math.round(age) + ' hours old: the radar PC is probably off. Figures show the last published state.' : '';
     $('k-n').textContent = data.subnets.length; $('k-block').textContent = 'block ' + data.block.toLocaleString('en');
     $('k-mcap').textContent = compact(data.total_mcap) + ' τ';
-    const top = data.subnets.find((s) => s.rank === 1);
-    if (top) { $('k-top').textContent = top.name; $('k-top-sub').textContent = 'SN' + top.netuid + ' · score ' + top.score.toFixed(1); }
+    const inv = view === 'investing';
+    const top = inv ? data.subnets.filter((s) => s.inv_rank && !s.inv.red_flag).sort((a, b) => a.inv_rank - b.inv_rank)[0] : data.subnets.find((s) => s.rank === 1);
+    $('k-top-label').textContent = inv ? 'Top long-term pick' : 'Top trading signal';
+    if (top) { $('k-top').textContent = top.name; $('k-top-sub').textContent = 'SN' + top.netuid + ' · score ' + (inv ? top.inv_score : top.score).toFixed(1); }
+    else { $('k-top').textContent = '—'; $('k-top-sub').textContent = ' '; }
     $('k-dev').textContent = data.dev && data.dev.subnets ? data.dev.subnets + ' repos' : '–';
   }
 
+  function trading() {
+    $('tabs').replaceChildren(); $('rep-extra').replaceChildren();
+    const picks = $('picks'); picks.replaceChildren();
+    $('rep-title').textContent = 'Strongest trading signals now';
+    $('rep-sub').textContent = 'Live ranking from ' + when(data.updated) + ': net TAO flow and price moves of the last 24 hours. Short-term only.';
+    const top = data.subnets.filter((s) => s.rank).sort((a, b) => a.rank - b.rank).slice(0, 10);
+    if (!top.length) { $('rep-sub').textContent = 'Needs 24 hours of history first.'; return; }
+    for (const r of top) {
+      picks.append(el('li', { class: 'pick' }, el('div', { class: 'rk', text: r.rank }),
+        el('div', {}, el('div', { class: 'nm' }, r.name, el('small', { text: 'SN' + r.netuid })),
+          el('div', { class: 'cat', text: (r.category || 'Other') + ' · pool ' + compact(r.tao_in) + ' τ' }),
+          el('ul', {}, el('li', { class: cls(r.chg_24h), text: 'price ' + pct(r.chg_24h) + ' in 24h' }), el('li', { class: cls(r.flow_pct), text: 'net flow ' + pct(r.flow_pct) + ' of pool' }),
+            r.no_emission ? el('li', { class: 'dim', text: 'no emissions right now' }) : null)),
+        el('div', { class: 'sc' }, r.score.toFixed(0), el('small', { text: 'trading' }))));
+    }
+  }
+
   function report() {
+    if (view === 'trading') return trading();
     const reps = data.reports || {};
     const kinds = ['weekly', 'monthly'].filter((k) => reps[k]);
     const tabs = $('tabs'); tabs.replaceChildren();
@@ -172,19 +222,21 @@
     }
     const rep = reps[kind], picks = $('picks'), extra = $('rep-extra');
     picks.replaceChildren(); extra.replaceChildren();
-    if (!rep) { $('rep-title').textContent = 'Undervalued subnets'; $('rep-sub').textContent = 'The first report appears after the radar has collected a few days of history.'; return; }
-    $('rep-title').textContent = (kind === 'weekly' ? 'Weekly' : 'Monthly') + ' undervalued subnets' + (rep.preview ? ' (preview)' : '');
+    if (!rep) { $('rep-title').textContent = 'Long-term picks'; $('rep-sub').textContent = 'The first report appears after the radar has collected a few days of history.'; return; }
+    const inv = rep.view === 'investing';
+    $('rep-title').textContent = (kind === 'weekly' ? 'Weekly' : 'Monthly') + (inv ? ' long-term picks' : ' undervalued subnets') + (rep.preview ? ' (preview)' : '');
     $('rep-sub').textContent = 'Report of ' + when(rep.ts) + ' · ' + rep.coverage_days + ' of ' + rep.period_days + ' days of data. Price change since the report is shown per pick.';
     const now = Object.fromEntries(data.subnets.map((s) => [s.netuid, s]));
     for (const r of rep.top) {
       const cur = now[r.netuid], since = cur && cur.price && r.price ? (cur.price / r.price - 1) * 100 : null;
-      picks.append(el('li', { class: 'pick' }, el('div', { class: 'rk', text: r.value_rank }),
+      picks.append(el('li', { class: 'pick' }, el('div', { class: 'rk', text: inv ? r.investing_rank : r.value_rank }),
         el('div', {}, el('div', { class: 'nm' }, r.name, el('small', { text: 'SN' + r.netuid })),
           el('div', { class: 'cat', text: (r.category || 'Other') + ' · mcap ' + compact(r.mcap) + ' τ' }),
-          el('ul', {}, ...(r.reasons.length ? r.reasons : ['solid on all signals']).map((t) => el('li', { text: t }))),
+          el('ul', {}, ...(inv ? ['Fundamentals ' + r.fundamental + '/10: ' + (r.fund_why || 'researched')] : []).concat((r.reasons || []).slice(0, inv ? 2 : 4)).concat(inv && r.key_risk ? ['Risk: ' + r.key_risk] : []).map((t) => el('li', { text: t }))),
           el('div', { class: 'cat ' + cls(since), text: 'Since report: ' + pct(since) })),
-        el('div', { class: 'sc' }, (r.value_score ?? 0).toFixed(0), el('small', { text: 'value' }))));
+        el('div', { class: 'sc' }, ((inv ? r.investing_score : r.value_score) ?? 0).toFixed(0), el('small', { text: inv ? 'investing' : 'value' }))));
     }
+    if (rep.research_next && rep.research_next.length) extra.append(el('p', { class: 'note' }, el('b', { text: 'Strong on-chain, not researched yet: ' }), rep.research_next.map((r) => r.name + ' (SN' + r.netuid + ')').join(', ')));
     if (rep.divergences && rep.divergences.length) extra.append(el('p', { class: 'note' }, el('b', { text: 'Fundamentals up, price flat: ' }), rep.divergences.map((r) => r.name + ' (SN' + r.netuid + ')').join(', ')));
     if (rep.warnings && rep.warnings.length) extra.append(el('p', { class: 'note' }, el('b', { text: 'Warnings: ' }), rep.warnings.map((r) => r.name + ' (' + r.why[0] + ')').join(', ')));
   }
@@ -210,9 +262,10 @@
       for (const c of COLS) {
         const v = r[c.k];
         if (c.k === 'name') { tr.append(el('td', { class: 'l name', text: r.name })); continue; }
-        if (c.k === 'category') { tr.append(el('td', { class: 'l cat', text: v || '–' })); continue; }
+        if (c.k === 'category' || c.k === 'sector') { tr.append(el('td', { class: 'l cat', text: v || '–' })); continue; }
+        if (c.tag) { const t = c.tag(r); tr.append(el('td', { class: 'l' }, t ? el('span', { class: 'tag ' + (t[1] || ''), text: t[0] }) : el('span', { class: 'dim', text: '–' }))); continue; }
         if (c.k === 'spark') { tr.append(el('td', { class: 'spark' }, spark(r.spark))); continue; }
-        if (c.k === 'score') { const m = el('span', { class: 'meter' }, el('i')); m.firstChild.style.width = (v || 0) + '%'; tr.append(el('td', {}, m, v == null ? '–' : v.toFixed(1))); continue; }
+        if (c.meter) { const m = el('span', { class: 'meter' }, el('i')); m.firstChild.style.width = (v || 0) + '%'; tr.append(el('td', {}, m, v == null ? '–' : v.toFixed(1), c.k === 'inv_score' && r.inv && r.inv.red_flag ? ' ⚠' : '')); continue; }
         if (c.pct) { tr.append(el('td', { class: cls(v), text: pct(v) })); continue; }
         tr.append(el('td', { class: c.c ? cls(v) : '', text: c.f ? c.f(v) : String(v ?? '–') }));
       }
@@ -220,13 +273,29 @@
     }
   }
 
+  function setView(v) {
+    view = v; COLS = v === 'investing' ? COLS_I : COLS_T; sort = v === 'investing' ? { k: 'inv_rank', dir: 1 } : { k: 'rank', dir: 1 };
+    try { localStorage.setItem('site-view', v); } catch (e) {}
+    document.querySelectorAll('#views button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === v)));
+    $('viewnote').textContent = v === 'investing' ? 'Long-term: researched fundamentals + 30-day on-chain value' : 'Short-term: last 24 hours of flows and price';
+    if (data) { header(); report(); head(); table(); }
+  }
+  document.querySelectorAll('#views button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   $('search').addEventListener('input', (e) => { q = e.target.value.trim().toLowerCase(); table(); });
   $('cat').addEventListener('change', (e) => { cat = e.target.value; table(); });
   fetch('data.json?t=' + Date.now(), { cache: 'no-store' }).then((r) => r.json()).then((d) => {
-    data = d; header(); report();
+    data = d;
+    for (const r of d.subnets) {
+      const i = r.inv || {}; r.p = (d.profiles || {})[r.netuid] || null;
+      r.inv_score = i.investing_score ?? null; r.inv_rank = i.investing_rank ?? null; r.fund = i.fundamental ?? (r.p ? r.p.fundamental_score : null);
+      r.val_score = i.value_score ?? null; r.inv_flow = i.flow_pct ?? null; r.inv_price = i.price_chg ?? null;
+      r.sector = r.p ? r.p.sector : (r.category || 'Other');
+      r.p_status = r.p ? (STATUS[r.p.status] || [r.p.status])[0] : 'Not researched';
+      r.p_buyback = r.p ? (BUYBACK[r.p.buyback] || [r.p.buyback])[0] : null; r.p_verdict = r.p ? (VERDICT(r.p.price_verdict) || ['–'])[0] : null;
+    }
+    setView(view);
     const cats = [...new Set(d.subnets.map((s) => s.category).filter(Boolean))].sort();
     $('cat').append(...cats.map((c) => el('option', { value: c, text: c })));
-    head(); table();
   }).catch(() => { $('updated').textContent = 'No data published yet.'; });
 })();
 </script>
