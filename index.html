@@ -119,7 +119,7 @@
   <section class="card">
     <h2>How to read this</h2>
     <ul class="list">
-      <li><b>Investing score</b> (long term, 0–100): researched fundamentals 55% (live paid product, revenue, buybacks, price vs web2 rivals, rated 0–10) plus on-chain value 45% (emissions vs market-cap share, dev gap, net TAO inflow, discount, depth over 30 days). Only researched subnets get one; ⚠ marks steady selling or collapsing development.</li>
+      <li><b>Investing score</b> (long term, 0–100): researched fundamentals 50% (live paid product, revenue, buybacks, price vs web2 rivals, rated 0–10), on-chain value 35% (emissions vs market-cap share, dev gap, net TAO inflow, discount, depth over 30 days) and network health 15% (how spread out miners, validators and holders are). Only researched subnets get one; ⚠ marks steady selling, collapsing development, one wallet holding 30% or more, or the owner selling 20% or more of their holding.</li>
       <li><b>Trading score</b> (short term, 0–100): 24h net TAO flow, 24h momentum, trading activity, depth and development, ranked against all subnets, refreshed hourly.</li>
       <li>Revenue and buyback figures are mostly reported by the teams themselves.</li>
       <li><b>Value gap</b>: share of network emissions divided by share of market cap. Above 1× the network pays more than the market values.</li>
@@ -145,6 +145,8 @@
     { k: 'name', t: 'Subnet', l: true }, { k: 'sector', t: 'Sector', l: true },
     { k: 'inv_score', t: 'Investing', meter: true }, { k: 'fund', t: 'Fundamentals', f: (v) => v == null ? '–' : v.toFixed(1) + '/10' },
     { k: 'val_score', t: 'On-chain value', f: (v) => v == null ? '–' : v.toFixed(0) },
+    { k: 'health', t: 'Health', f: (v) => v == null ? '–' : v.toFixed(0) },
+    { k: 'top1', t: 'Top wallet', f: (v) => v == null ? '–' : v.toFixed(0) + '%' },
     { k: 'p_status', t: 'Product', l: true, tag: (r) => r.p ? STATUS[r.p.status] : ['Not researched', ''] },
     { k: 'p_buyback', t: 'Buybacks', l: true, tag: (r) => r.p ? BUYBACK[r.p.buyback] : null },
     { k: 'p_verdict', t: 'vs web2', l: true, tag: (r) => r.p ? VERDICT(r.p.price_verdict) : null },
@@ -290,6 +292,7 @@
       r.inv_score = i.investing_score ?? null; r.inv_rank = i.investing_rank ?? null; r.fund = i.fundamental ?? (r.p ? r.p.fundamental_score : null);
       r.val_score = i.value_score ?? null; r.inv_flow = i.flow_pct ?? null; r.inv_price = i.price_chg ?? null;
       r.sector = r.p ? r.p.sector : (r.category || 'Other');
+      r.top1 = r.net ? r.net.top1_share ?? null : null;
       r.p_status = r.p ? (STATUS[r.p.status] || [r.p.status])[0] : 'Not researched';
       r.p_buyback = r.p ? (BUYBACK[r.p.buyback] || [r.p.buyback])[0] : null; r.p_verdict = r.p ? (VERDICT(r.p.price_verdict) || ['–'])[0] : null;
     }
